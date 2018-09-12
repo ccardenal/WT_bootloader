@@ -345,7 +345,8 @@ void bootloader_uart_read_data(void)
                 bootloader_handle_dis_rw_protect(bl_rx_buffer);
                 break;
             default:
-                printmsg("BL_DEBUG_MSG:Invalid command code received from host \n");
+                printmsg(
+                        "BL_DEBUG_MSG:Invalid command code received from host \n");
                 break;
         }
     }
@@ -402,7 +403,6 @@ void printmsg(char *format, ...)
 #endif
 }
 
-
 void bootloader_handle_getver_cmd(uint8_t *bl_rx_buffer)
 {
     uint8_t bl_version;
@@ -416,7 +416,8 @@ void bootloader_handle_getver_cmd(uint8_t *bl_rx_buffer)
     // Extract the CRC32 sent by the Host
     uint32_t host_crc = *((uint32_t *) (bl_rx_buffer + command_packet_len - 4));
 
-    if (!bootloader_verify_crc(&bl_rx_buffer[0], command_packet_len - 4, host_crc))
+    if (!bootloader_verify_crc(&bl_rx_buffer[0], command_packet_len - 4,
+            host_crc))
     {
         printmsg("BL_DEBUG_MSG: checksum success!!\r\n");
         bootloader_send_ack(bl_rx_buffer[0], 1);
@@ -432,72 +433,60 @@ void bootloader_handle_getver_cmd(uint8_t *bl_rx_buffer)
     }
 }
 
-
 void bootloader_handle_gethelp_cmd(uint8_t *pBuffer)
 {
 
 }
-
 
 void bootloader_handle_getcid_cmd(uint8_t *pBuffer)
 {
 
 }
 
-
 void bootloader_handle_getrdp_cmd(uint8_t *pBuffer)
 {
 
 }
-
 
 void bootloader_handle_go_cmd(uint8_t *pBuffer)
 {
 
 }
 
-
 void bootloader_handle_flash_erase_cmd(uint8_t *pBuffer)
 {
 
 }
-
 
 void bootloader_handle_mem_write_cmd(uint8_t *pBuffer)
 {
 
 }
 
-
 void bootloader_handle_en_rw_protect(uint8_t *pBuffer)
 {
 
 }
 
-
-void bootloader_handle_mem_read (uint8_t *pBuffer)
+void bootloader_handle_mem_read(uint8_t *pBuffer)
 {
 
 }
-
 
 void bootloader_handle_read_sector_protection_status(uint8_t *pBuffer)
 {
 
 }
 
-
 void bootloader_handle_read_otp(uint8_t *pBuffer)
 {
 
 }
 
-
 void bootloader_handle_dis_rw_protect(uint8_t *pBuffer)
 {
 
 }
-
 
 // This function sends ACK if CRC matches along with "len to follow"
 void bootloader_send_ack(uint8_t command_code, uint8_t follow_len)
@@ -509,15 +498,13 @@ void bootloader_send_ack(uint8_t command_code, uint8_t follow_len)
     HAL_UART_Transmit(C_UART, ack_buf, 2, HAL_MAX_DELAY);
 }
 
-
 void bootloader_send_nack(void)
 {
     uint8_t nack = BL_NACK;
     HAL_UART_Transmit(C_UART, &nack, 1, HAL_MAX_DELAY);
 }
 
-
-uint8_t bootloader_verify_crc (uint8_t *pData, uint32_t len,uint32_t crc_host)
+uint8_t bootloader_verify_crc(uint8_t *pData, uint32_t len, uint32_t crc_host)
 {
     uint32_t uwCRCValue = 0xff;
 
@@ -527,6 +514,9 @@ uint8_t bootloader_verify_crc (uint8_t *pData, uint32_t len,uint32_t crc_host)
         uwCRCValue = HAL_CRC_Accumulate(&hcrc, &i_data, 1);
     }
 
+    /* Reset CRC Calculation Unit */
+    __HAL_CRC_DR_RESET(&hcrc);
+
     if (uwCRCValue == crc_host)
     {
         return VERIFY_CRC_SUCCESS;
@@ -535,14 +525,12 @@ uint8_t bootloader_verify_crc (uint8_t *pData, uint32_t len,uint32_t crc_host)
     return VERIFY_CRC_FAIL;
 }
 
-
 uint8_t get_bootloader_version(void)
 {
-    return (uint8_t)BL_VERSION;
+    return (uint8_t) BL_VERSION;
 }
 
-
-void bootloader_uart_write_data(uint8_t *pBuffer,uint32_t len)
+void bootloader_uart_write_data(uint8_t *pBuffer, uint32_t len)
 {
     HAL_UART_Transmit(C_UART, pBuffer, len, HAL_MAX_DELAY);
 }
