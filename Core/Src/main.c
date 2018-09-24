@@ -357,7 +357,7 @@ void bootloader_uart_read_data(void)
                 break;
             default:
                 printmsg(
-                        "BL_DEBUG_MSG:Invalid command code received from host \n");
+                        "BL_DEBUG_MSG:Invalid command code received from host \n\r");
                 break;
         }
     }
@@ -474,7 +474,7 @@ void bootloader_handle_gethelp_cmd(uint8_t *pBuffer)
 void bootloader_handle_getcid_cmd(uint8_t *pBuffer)
 {
     uint16_t bl_cid_num = 0;
-    printmsg("BL_DEBUG_MSG:bootloader_handle_getcid_cmd\n");
+    printmsg("BL_DEBUG_MSG:bootloader_handle_getcid_cmd\n\r");
 
     //Total length of the command packet
     uint32_t command_packet_len = bl_rx_buffer[0]+1 ;
@@ -484,15 +484,15 @@ void bootloader_handle_getcid_cmd(uint8_t *pBuffer)
 
     if (! bootloader_verify_crc(&bl_rx_buffer[0],command_packet_len-4,host_crc))
     {
-        printmsg("BL_DEBUG_MSG:checksum success !!\n");
+        printmsg("BL_DEBUG_MSG:checksum success !!\n\r");
         bootloader_send_ack(pBuffer[0],2);
         bl_cid_num = get_mcu_chip_id();
-        printmsg("BL_DEBUG_MSG:MCU id : %d %#x !!\n",bl_cid_num, bl_cid_num);
+        printmsg("BL_DEBUG_MSG:MCU id : %d %#x !!\n\r",bl_cid_num, bl_cid_num);
         bootloader_uart_write_data((uint8_t *)&bl_cid_num,2);
 
     }else
     {
-        printmsg("BL_DEBUG_MSG:checksum fail !!\n");
+        printmsg("BL_DEBUG_MSG:checksum fail !!\n\r");
         bootloader_send_nack();
     }
 
@@ -502,7 +502,7 @@ void bootloader_handle_getcid_cmd(uint8_t *pBuffer)
 void bootloader_handle_getrdp_cmd(uint8_t *pBuffer)
 {
     uint8_t rdp_level = 0x00;
-    printmsg("BL_DEBUG_MSG:bootloader_handle_getrdp_cmd\n");
+    printmsg("BL_DEBUG_MSG:bootloader_handle_getrdp_cmd\n\r");
 
     //Total length of the command packet
     uint32_t command_packet_len = bl_rx_buffer[0]+1 ;
@@ -534,7 +534,7 @@ void bootloader_handle_go_cmd(uint8_t *pBuffer)
     uint8_t addr_valid = ADDR_VALID;
     uint8_t addr_invalid = ADDR_INVALID;
 
-    printmsg("BL_DEBUG_MSG:bootloader_handle_go_cmd\n");
+    printmsg("BL_DEBUG_MSG:bootloader_handle_go_cmd\n\r");
 
     //Total length of the command packet
     uint32_t command_packet_len = bl_rx_buffer[0]+1 ;
@@ -544,13 +544,13 @@ void bootloader_handle_go_cmd(uint8_t *pBuffer)
 
     if (! bootloader_verify_crc(&bl_rx_buffer[0],command_packet_len-4,host_crc))
     {
-        printmsg("BL_DEBUG_MSG:checksum success !!\n");
+        printmsg("BL_DEBUG_MSG:checksum success !!\n\r");
 
         bootloader_send_ack(pBuffer[0],1);
 
         //extract the go address
         go_address = *((uint32_t *)&pBuffer[2] );
-        printmsg("BL_DEBUG_MSG:GO addr: %#x\n",go_address);
+        printmsg("BL_DEBUG_MSG:GO addr: %#x\n\r",go_address);
 
         if( verify_address(go_address) == ADDR_VALID )
         {
@@ -570,20 +570,20 @@ void bootloader_handle_go_cmd(uint8_t *pBuffer)
 
             void (*lets_jump)(void) = (void *)go_address;
 
-            printmsg("BL_DEBUG_MSG: jumping to go address! \n");
+            printmsg("BL_DEBUG_MSG: jumping to go address! \n\r");
 
             lets_jump();
 
         }else
         {
-            printmsg("BL_DEBUG_MSG:GO addr invalid ! \n");
+            printmsg("BL_DEBUG_MSG:GO addr invalid ! \n\r");
             //tell host that address is invalid
             bootloader_uart_write_data(&addr_invalid,1);
         }
 
     }else
     {
-        printmsg("BL_DEBUG_MSG:checksum fail !!\n");
+        printmsg("BL_DEBUG_MSG:checksum fail !!\n\r");
         bootloader_send_nack();
     }
 
@@ -591,9 +591,37 @@ void bootloader_handle_go_cmd(uint8_t *pBuffer)
 
 
 
+/*Helper function to handle BL_FLASH_ERASE command */
 void bootloader_handle_flash_erase_cmd(uint8_t *pBuffer)
 {
+    uint8_t erase_status = 0x00;
+    printmsg("BL_DEBUG_MSG:bootloader_handle_flash_erase_cmd\n");
 
+    //Total length of the command packet
+    uint32_t command_packet_len = bl_rx_buffer[0]+1 ;
+
+    //extract the CRC32 sent by the Host
+    uint32_t host_crc = *((uint32_t * ) (bl_rx_buffer+command_packet_len - 4) ) ;
+
+    if (! bootloader_verify_crc(&bl_rx_buffer[0],command_packet_len-4,host_crc))
+    {
+        printmsg("BL_DEBUG_MSG:checksum success !!\n");
+        bootloader_send_ack(pBuffer[0],1);
+        printmsg("BL_DEBUG_MSG:initial_sector : %d  no_ofsectors: %d\n",pBuffer[2],pBuffer[3]);
+
+        HAL_GPIO_WritePin(GPIOD, GPIO_PIN_14,1);
+        erase_status = execute_flash_erase(pBuffer[2] , pBuffer[3]);
+        HAL_GPIO_WritePin(GPIOD, GPIO_PIN_14,0);
+
+        printmsg("BL_DEBUG_MSG: flash erase status: %#x\n",erase_status);
+
+        bootloader_uart_write_data(&erase_status,1);
+
+    }else
+    {
+        printmsg("BL_DEBUG_MSG:checksum fail !!\n");
+        bootloader_send_nack();
+    }
 }
 
 void bootloader_handle_mem_write_cmd(uint8_t *pBuffer)
@@ -742,6 +770,53 @@ uint8_t verify_address(uint32_t go_address)
     }
     else
         return ADDR_INVALID;
+}
+
+
+uint8_t execute_flash_erase(uint8_t sector_number , uint8_t number_of_sector)
+{
+   //we have totally 8 sectors in STM32F446RE mcu .. sector[0 to 7]
+   //number_of_sector has to be in the range of 0 to 7
+   // if sector_number = 0xff , that means mass erase !
+   //Code needs to modified if your MCU supports more flash sectors
+   FLASH_EraseInitTypeDef flashErase_handle;
+   uint32_t sectorError;
+   HAL_StatusTypeDef status;
+
+
+   if( number_of_sector > 11 )
+       return INVALID_SECTOR;
+
+   if( (sector_number == 0xff ) || (sector_number <= 11) )
+   {
+       if(sector_number == (uint8_t) 0xff)
+       {
+           flashErase_handle.TypeErase = FLASH_TYPEERASE_MASSERASE;
+       }else
+       {
+           /*Here we are just calculating how many sectors needs to erased */
+           uint8_t remanining_sector = 11 - sector_number;
+           if( number_of_sector > remanining_sector)
+           {
+               number_of_sector = remanining_sector;
+           }
+           flashErase_handle.TypeErase = FLASH_TYPEERASE_SECTORS;
+           flashErase_handle.Sector = sector_number; // this is the initial sector
+           flashErase_handle.NbSectors = number_of_sector;
+       }
+       flashErase_handle.Banks = FLASH_BANK_1;
+
+       /*Get access to touch the flash registers */
+       HAL_FLASH_Unlock();
+       flashErase_handle.VoltageRange = FLASH_VOLTAGE_RANGE_3;  // our mcu will work on this voltage range
+       status = (uint8_t) HAL_FLASHEx_Erase(&flashErase_handle, &sectorError);
+       HAL_FLASH_Lock();
+
+       return status;
+   }
+
+
+   return INVALID_SECTOR;
 }
 
 /* USER CODE END 4 */
