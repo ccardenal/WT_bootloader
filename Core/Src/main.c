@@ -726,7 +726,28 @@ void bootloader_handle_mem_read(uint8_t *pBuffer)
 
 void bootloader_handle_read_sector_protection_status(uint8_t *pBuffer)
 {
+    uint16_t status;
+   printmsg("BL_DEBUG_MSG:bootloader_handle_read_sector_protection_status\n");
 
+   //Total length of the command packet
+   uint32_t command_packet_len = bl_rx_buffer[0]+1 ;
+
+   //extract the CRC32 sent by the Host
+   uint32_t host_crc = *((uint32_t * ) (bl_rx_buffer+command_packet_len - 4) ) ;
+
+   if (! bootloader_verify_crc(&bl_rx_buffer[0],command_packet_len-4,host_crc))
+   {
+       printmsg("BL_DEBUG_MSG:checksum success !!\n");
+       bootloader_send_ack(pBuffer[0],2);
+       status=read_OB_rw_protection_status();
+       printmsg("BL_DEBUG_MSG: nWRP status: %#x\n",status);
+       bootloader_uart_write_data((uint8_t*)&status,2);
+
+   }else
+   {
+       printmsg("BL_DEBUG_MSG:checksum fail !!\n");
+       bootloader_send_nack();
+   }
 }
 
 void bootloader_handle_read_otp(uint8_t *pBuffer)
@@ -736,7 +757,31 @@ void bootloader_handle_read_otp(uint8_t *pBuffer)
 
 void bootloader_handle_dis_rw_protect(uint8_t *pBuffer)
 {
+    uint8_t status = 0x00;
+    printmsg("BL_DEBUG_MSG:bootloader_handle_dis_rw_protect\n");
 
+    //Total length of the command packet
+    uint32_t command_packet_len = bl_rx_buffer[0]+1 ;
+
+    //extract the CRC32 sent by the Host
+    uint32_t host_crc = *((uint32_t * ) (bl_rx_buffer+command_packet_len - 4) ) ;
+
+    if (! bootloader_verify_crc(&bl_rx_buffer[0],command_packet_len-4,host_crc))
+    {
+        printmsg("BL_DEBUG_MSG:checksum success !!\n");
+        bootloader_send_ack(pBuffer[0],1);
+
+        status = configure_flash_sector_rw_protection(0,0,1);
+
+        printmsg("BL_DEBUG_MSG: flash erase status: %#x\n",status);
+
+        bootloader_uart_write_data(&status,1);
+
+    }else
+    {
+        printmsg("BL_DEBUG_MSG:checksum fail !!\n");
+        bootloader_send_nack();
+    }
 }
 
 // This function sends ACK if CRC matches along with "len to follow"
@@ -1028,6 +1073,23 @@ uint8_t configure_flash_sector_rw_protection(uint8_t sector_details, uint8_t pro
     }
 
         return 0;
+}
+
+uint16_t read_OB_rw_protection_status(void)
+{
+    //This structure is given by ST Flash driver to hold the OB(Option Byte) contents .
+    FLASH_OBProgramInitTypeDef OBInit;
+
+    //First unlock the OB(Option Byte) memory access
+    HAL_FLASH_OB_Unlock();
+    //get the OB configuration details
+    HAL_FLASHEx_OBGetConfig(&OBInit);
+    //Lock back .
+    HAL_FLASH_Lock();
+
+    //We are just interested in r/w protection status of the sectors.
+    return (uint16_t)OBInit.WRPSector;
+
 }
 /* USER CODE END 4 */
 
